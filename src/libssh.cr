@@ -91,17 +91,20 @@ module LibSSH
   
     # Set options...
     Library.ssh_options_set(session, Library::SSH_OPTIONS_HOST, host)
-  
-    rc = Library.ssh_connect(session)
-    if rc != Library::SSH_OK
-      puts "Error: Unable to connect to server"
-      # Handle the error...
-    end
-  
-    rc = Library.ssh_userauth_password(session, username, password)
-    if rc != Library::SSH_AUTH_SUCCESS
-      puts "Error: Authentication failed"
-      # Handle the error...
+    
+    begin
+      rc = Library.ssh_connect(session)
+      if rc != Library::SSH_OK
+        raise Exception.new("Unable to connect to host: #{host}")
+      end
+    
+      rc = Library.ssh_userauth_password(session, username, password)
+      if rc != Library::SSH_AUTH_SUCCESS
+        raise Exception.new("Authentication failed: #{username}")
+      end
+    rescue ex
+      puts ex.message
+      exit 1
     end
   
     return session
@@ -112,17 +115,20 @@ module LibSSH
 
     # Use the session...
     channel = Library.ssh_channel_new(session)
-  
-    rc = Library.ssh_channel_open_session(channel)
-    if rc != Library::SSH_OK
-      puts "Error: Unable to open SSH channel session"
-      # Handle the error...
-    end
-  
-    rc = Library.ssh_channel_request_exec(channel, command)
-    if rc != Library::SSH_OK
-      puts "Error: Unable to execute command"
-      # Handle the error...
+    
+    begin
+      rc = Library.ssh_channel_open_session(channel)
+      if rc != Library::SSH_OK
+        raise Exception.new("Unable to open SSH channel session")
+      end
+    
+      rc = Library.ssh_channel_request_exec(channel, command)
+      if rc != Library::SSH_OK
+        raise Exception.new("Unable to execute command")
+      end
+    rescue ex
+      puts ex.message
+      exit 1
     end
   
     buffer = Pointer(UInt8).malloc(256)
