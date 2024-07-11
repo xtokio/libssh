@@ -1,0 +1,9 @@
+name: libssh
+version: 0.1.0
+
+authors:
+  - Luis Gomez <xtokio@gmail.com>
+
+crystal: '>= 1.12.1'
+
+license: MIT
