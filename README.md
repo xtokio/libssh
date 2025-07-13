@@ -21,11 +21,11 @@ brew install libssh
 
 1. Add the dependency to your `shard.yml`:
 
-   ```yaml
-   dependencies:
-     libssh:
-       github: xtokio/libssh
-   ```
+  ```yaml
+  dependencies:
+    libssh:
+      github: xtokio/libssh
+  ```
 
 2. Run `shards install`
 
