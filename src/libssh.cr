@@ -65,95 +65,171 @@ lib Library
 
   # Show version
   fun ssh_version() : UInt8*
-  
+  fun ssh_get_error(session : Pointer(Void)) : Void
   fun ssh_new() : Pointer(Void)
   fun ssh_free(session : Pointer(Void)) : Void
   fun ssh_options_set(session : Pointer(Void), option : Int32, value : UInt8*) : Int32
   fun ssh_connect(session : Pointer(Void)) : Int32
   fun ssh_userauth_password(session : Pointer(Void), username : UInt8*, password : UInt8*) : Int32
   fun ssh_disconnect(session : Pointer(Void)) : Void
-  
+
   fun ssh_channel_new(session : Pointer(Void)) : Pointer(Void)
   fun ssh_channel_free(channel : Pointer(Void)) : Void
   fun ssh_channel_open_session(channel : Pointer(Void)) : Int32
+  fun ssh_channel_request_pty(channel : Pointer(Void)) : Int32
+  fun ssh_channel_request_shell(channel : Pointer(Void)) : Int32
   fun ssh_channel_request_exec(channel : Pointer(Void), command : UInt8*) : Int32
   fun ssh_channel_read(channel : Pointer(Void), buffer : Pointer(Void), buffer_size : UInt32, timeout_ms : Int32) : Int32
+  fun ssh_channel_write(channel : Pointer(Void), command : UInt8*, command_size : UInt32) : Int32
   fun ssh_channel_send_eof(channel : Pointer(Void)) : Int32
   fun ssh_channel_close(channel : Pointer(Void)) : Int32
 end
 
-module LibSSH
-  VERSION = "0.1.0"
-  extend self
+class LibSSH
 
-  def connect(host,username,password)
+  def initialize(@host : String,@username : String,@password : String)
+  end
+
+  private def connect()
     session = Library.ssh_new()
-  
+
     # Set options...
-    Library.ssh_options_set(session, Library::SSH_OPTIONS_HOST, host)
-    
-    begin
-      rc = Library.ssh_connect(session)
-      if rc != Library::SSH_OK
-        raise Exception.new("Unable to connect to host: #{host}")
-      end
-    
-      rc = Library.ssh_userauth_password(session, username, password)
-      if rc != Library::SSH_AUTH_SUCCESS
-        raise Exception.new("Authentication failed: #{username}")
-      end
-    rescue ex
-      puts ex.message
-      exit 1
+    Library.ssh_options_set(session, Library::SSH_OPTIONS_HOST, @host)
+
+    rc = Library.ssh_connect(session)
+    if rc != Library::SSH_OK
+      puts "Error: Unable to connect to server"
+      # Handle the error...
     end
-  
+
+    rc = Library.ssh_userauth_password(session, @username, @password)
+    if rc != Library::SSH_AUTH_SUCCESS
+      puts "Error: Authentication failed"
+      # Handle the error...
+    end
+
     return session
   end
 
-  def execute_command(session,command)
+  def execute_command(command)
     response   = ""
 
+    session = connect()
     # Use the session...
     channel = Library.ssh_channel_new(session)
-    
-    begin
-      rc = Library.ssh_channel_open_session(channel)
-      if rc != Library::SSH_OK
-        raise Exception.new("Unable to open SSH channel session")
-      end
-    
-      rc = Library.ssh_channel_request_exec(channel, command)
-      if rc != Library::SSH_OK
-        raise Exception.new("Unable to execute command")
-      end
-    rescue ex
-      puts ex.message
-      exit 1
+
+    rc = Library.ssh_channel_open_session(channel)
+
+    if rc != Library::SSH_OK
+      puts "Error: Unable to open SSH channel session"
+      # Handle the error...
     end
-  
+
+    rc = Library.ssh_channel_request_exec(channel, command)
+
+    if rc != Library::SSH_OK
+      puts "Error: Unable to execute command"
+      # Handle the error...
+    end
+
     buffer = Pointer(UInt8).malloc(256)
     nbytes = Library.ssh_channel_read(channel, buffer, 256, 0)
     response += String.new(Slice.new(buffer,256))
-  
-    while nbytes > 0  
+
+    while nbytes > 0
       buffer = Pointer(UInt8).malloc(256)
       nbytes = Library.ssh_channel_read(channel, buffer, 256, 0)
       response += String.new(Slice.new(buffer,256))
     end
-  
+
     Library.ssh_channel_send_eof(channel)
     Library.ssh_channel_close(channel)
     Library.ssh_channel_free(channel)
-  
+
+    close_session(session)
+
     return response
   end
-  
+
+  def execute_config_command(commands : Array(String))
+    response = ""
+
+    session = connect()
+    # Use the session...
+    channel = Library.ssh_channel_new(session)
+
+    rc = Library.ssh_channel_open_session(channel)
+
+    if rc != Library::SSH_OK
+      puts "Error: Unable to open SSH channel session"
+      # Handle the error...
+    end
+
+    # Request a shell
+    rc = Library.ssh_channel_request_shell(channel)
+    if rc != Library::SSH_OK
+      puts "Error: Unable to request shell"
+      # Handle the error...
+    end
+
+    # Send the command to the Cisco switch
+    configure_terminal = "configure terminal\n\n"
+    Library.ssh_channel_write(channel, configure_terminal, configure_terminal.size)
+
+    # sleep Time::Span.new(seconds: 1)
+
+    # Parse commands
+    commands.each do |command|
+      command += "\n\n"
+      Library.ssh_channel_write(channel, command, command.size)
+      # sleep Time::Span.new(seconds: 1)
+    end
+
+    command = "end\n"
+    Library.ssh_channel_write(channel, command, command.size)
+
+    command = "exit\n"
+    Library.ssh_channel_write(channel, command, command.size)
+    # sleep Time::Span.new(seconds: 1)
+
+    # Read the output from the Cisco switch
+    response_output = ""
+    buffer = Pointer(UInt8).malloc(256)
+    nbytes = Library.ssh_channel_read(channel, buffer, 256, 0)
+    response_output += String.new(Slice.new(buffer,256))
+
+    # puts Library.ssh_get_error(session)
+
+    while nbytes > 0
+      buffer = Pointer(UInt8).malloc(256)
+      nbytes = Library.ssh_channel_read(channel, buffer, 256, 0)
+      response_output += String.new(Slice.new(buffer,256))
+    end
+
+    Library.ssh_channel_send_eof(channel)
+    Library.ssh_channel_close(channel)
+    Library.ssh_channel_free(channel)
+
+    close_session(session)
+
+    # Remove "prompt" lines
+    response_output.each_line.with_index do |line,index|
+
+      if !line.includes?("#") && !line.includes?("one per line")
+        response += line + "\n"
+      end
+
+    end
+
+    return response
+  end
+
   def close_session(session)
     Library.ssh_disconnect(session)
     Library.ssh_free(session)
   end
 
   def version
-    String.new Library.ssh_version()
+    String.new(Library.ssh_version())
   end
 end
