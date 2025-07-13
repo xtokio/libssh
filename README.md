@@ -41,7 +41,7 @@ response = ssh.execute_command("show running-config interface gi1/0/1")
 puts response
 
 # Execute command in config mode
-response ssh.execute_config_command(["do show running-config interface gi1/0/13"])
+response ssh.execute_config_command(["do show running-config interface gi1/0/1"])
 puts response
 
 # Create VLAN
