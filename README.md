@@ -1,6 +1,6 @@
 # libssh
 
-LibSSH implementation in Crystal Lang
+LibSSH implementation in Crystal Lang to execute Cisco commands
 
 ## Installation
 
@@ -34,11 +34,21 @@ brew install libssh
 ```crystal
 require "libssh"
 
-session  = LibSSH.connect("example.com","user","password")
-response = LibSSH.execute_command(session,"ls -aslh")
-LibSSH.close_session(session)
+ssh = LibSSH.new("example.com","user","password")
 
+# Execute command
+response = ssh.execute_command("show running-config interface gi1/0/1")
 puts response
+
+# Execute command in config mode
+response ssh.execute_config_command(["do show running-config interface gi1/0/13"])
+puts response
+
+# Create VLAN
+ssh.execute_config_command(["vlan 10","name vlan10"])
+
+# Remove VLAN
+ssh.execute_config_command(["no vlan 10"])
 ```
 
 ## Contributing
