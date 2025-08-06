@@ -2,6 +2,13 @@
 
 LibSSH implementation in Crystal Lang to execute Cisco commands
 
+Configure the user account with privilege level 15 (full access) to be able to login directly into `enabled mode`
+```
+Switch> enable
+Switch# configure terminal
+Switch(config)# username YOURUSERNAME privilege 15 secret YOURPASSWORD
+```
+
 ## Installation
 
 RedHat
